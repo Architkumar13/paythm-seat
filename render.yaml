@@ -1,0 +1,29 @@
+# Public demo credentials. This service has open registration and no real payments.
+# Replace ADMIN_TOKEN and JWT_SECRET before using the code for anything else.
+services:
+  - type: web
+    name: seat-reservation
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health/ready
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: seat-reservation-db
+          property: connectionString
+      - key: ADMIN_TOKEN
+        value: paytm-demo-admin
+      - key: JWT_SECRET
+        value: paytm-demo-jwt-secret-change-me
+      - key: DB_MAX_CONNS
+        value: "10"
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: seat-reservation-db
+    plan: free
+    region: singapore
+    databaseName: seats
+    user: seats
