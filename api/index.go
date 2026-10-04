@@ -72,5 +72,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database initialization error: "+initErr.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Restore original request path so mux matches /health/live, /shows/{id}, etc.
+	if p := r.URL.Query().Get("__path"); p != "" {
+		r.URL.Path = p
+	} else if orig := r.Header.Get("x-matched-path"); orig != "" {
+		r.URL.Path = orig
+	} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" {
+		r.URL.Path = orig
+	}
+
 	handler.ServeHTTP(w, r)
 }

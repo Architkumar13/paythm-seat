@@ -247,16 +247,26 @@ go test ./...
 
 ## Deploy
 
-`render.yaml` is a Render blueprint: a Docker web service and Postgres, health check `/health/ready`. In the Render dashboard choose **New → Blueprint**, point it at this repo, and apply the file. Put the service and the database in the same region.
+- **Live Service URL**: `https://paythm-seat.vercel.app`
+- **Database**: Cloud PostgreSQL 16 on Neon (`us-east-2`)
+- **Health Live**: `https://paythm-seat.vercel.app/health/live`
+- **Health Ready**: `https://paythm-seat.vercel.app/health/ready`
+- **Metrics**: `https://paythm-seat.vercel.app/metrics`
 
-The blueprint admin token is `paytm-demo-admin`. It is a public demo credential; registration is open and there are no real charges. Free Postgres on Render expires 30 days after creation. Free web services sleep after about 15 minutes; the burst script waits up to 90 seconds for `/health/ready` on a cold start.
+Run the burst stress test directly against the live deployment:
 
 ```bash
 export ADMIN_TOKEN=paytm-demo-admin
-./burst.sh https://YOUR-SERVICE.onrender.com
+./burst.sh https://paythm-seat.vercel.app
 ```
 
-Metrics are `https://YOUR-SERVICE.onrender.com/metrics`. Logs are the service logs in the Render dashboard (JSON lines on stdout, each with `request_id`).
+Windows, or any machine with Go:
+
+```bash
+go run ./cmd/burst --base-url https://paythm-seat.vercel.app --admin-token paytm-demo-admin
+```
+
+Containerized deployment is also supported via `render.yaml` (Render Blueprint) and `docker-compose.yml`. Admin token for public demo testing is `paytm-demo-admin`.
 
 ## Configuration
 
