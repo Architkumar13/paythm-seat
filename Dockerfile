@@ -7,8 +7,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server 
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates \
-    && adduser -D -H -u 10001 app
+    && adduser -D -H -u 1000 app
 USER app
 COPY --from=build /out/server /server
-EXPOSE 8080
+EXPOSE 8080 7860
 ENTRYPOINT ["/server"]
