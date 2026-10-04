@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -75,24 +74,17 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Restore original request path from client request
-	if r.RequestURI != "" {
-		if reqURL, err := url.ParseRequestURI(r.RequestURI); err == nil && reqURL.Path != "" && reqURL.Path != "/api" {
-			r.URL.Path = reqURL.Path
-			if reqURL.RawQuery != "" {
-				r.URL.RawQuery = reqURL.RawQuery
-			}
-		}
+	// In Vercel, x-matched-path or x-forwarded-uri carries the actual client path (e.g. /health/live)
+	orig := r.Header.Get("x-matched-path")
+	if orig == "" || orig == "/api" {
+		orig = r.Header.Get("x-forwarded-uri")
 	}
-	if p := r.URL.Query().Get("__path"); p != "" {
-		if !strings.HasPrefix(p, "/") {
-			p = "/" + p
+	if orig != "" && orig != "/api" {
+		if u, err := url.Parse(orig); err == nil && u.Path != "" {
+			r.URL.Path = u.Path
+		} else {
+			r.URL.Path = orig
 		}
-		r.URL.Path = p
-	} else if orig := r.Header.Get("x-matched-path"); orig != "" && orig != "/api" {
-		r.URL.Path = orig
-	} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" && orig != "/api" {
-		r.URL.Path = orig
 	}
 
 	handler.ServeHTTP(w, r)
