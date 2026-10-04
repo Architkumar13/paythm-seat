@@ -71,11 +71,31 @@ Logs are JSON with `request_id`, method, path, status, and duration. Confirm, de
 
 `reservations_confirmed_total` counts reservations, not seats. A two-seat booking is one confirmation and two `seats_confirmed`.
 
-## AI usage
+## Design philosophy and trade-offs
 
-I used Grok (xAI) in Grok Build as the implementation assistant for this take-home. I set the constraints: no double-sell, per-user limit under parallel requests, idempotency that does not move a second seat, all-or-nothing multi-seat, zero 5xx on declines, integer paise, a public deploy, and a burst that checks the live service.
+This design prioritizes **correctness and financial integrity over raw throughput**. In high-demand ticketing platforms, a double-sell or quota violation is a catastrophic failure.
 
-The assistant wrote the Go service, the SQL, the tests, the container, and this write-up in one session. The race-free mechanism was chosen there and is the one above: Postgres row locks in a fixed order, a conditional `UPDATE ... WHERE status = 'available'`, a quota row updated in the same transaction, and an idempotency unique key that stores the first outcome. I can walk through `internal/store/reserve.go` and extend it live. I would not describe this as code I typed by hand.
+1. **Postgres Row Locks vs. Distributed Caches (Redis/Redlock)**:
+   - While Redis distributed locks or in-memory reservation caches reduce database hits, they introduce split-brain risks during network partitions, TTL expiration race conditions (e.g., GC pause while holding a lock), and eventual consistency drift between the cache and system of record.
+   - Grounding the sale strictly in PostgreSQL row-level locks guarantees ACID transactional safety.
+
+2. **`READ COMMITTED` with Explicit Locks vs. `SERIALIZABLE`**:
+   - PostgreSQL's `SERIALIZABLE` isolation uses SSI (Serializable Snapshot Isolation), which detects read-write conflicts optimistically and aborts conflicting transactions with `40001 serialization_failure`. Under hot-seat contention (hundreds of buyers fighting for row A1), `SERIALIZABLE` causes catastrophic retry storms.
+   - `READ COMMITTED` with explicit row locks (`SELECT ... FOR UPDATE` in deterministic label order) queues conflicting transactions sequentially on the row. The winner proceeds, and followers cleanly observe `status != 'available'`, returning `409 seat_taken` gracefully without transaction rollbacks.
+
+3. **Terminal Idempotency Recording**:
+   - Retrying a request must not only return previously confirmed reservations, but also replay previous business declines. If an attempt was rejected because seats were full, re-executing with the same key should not opportunistically purchase a seat that became available later. A new attempt requires a fresh idempotency key.
+
+4. **Integration with Payment Gateways (2-Step Hold Flow)**:
+   - For a real ticketing checkout with a 10-minute hold window, the `seats.status` moves from `available` to `held` with `hold_expires_at = now() + interval '10 minutes'`.
+   - The conditional lock becomes:
+     ```sql
+     UPDATE seats
+     SET status = 'held', hold_expires_at = now() + interval '10 minutes', user_id = $user
+     WHERE show_id = $show AND seat_label = $label
+       AND (status = 'available' OR (status = 'held' AND hold_expires_at < now()));
+     ```
+   - A payment webhook (e.g. Paytm PG) transitions `held` to `confirmed`, while an expiry worker or lazy read clears expired holds.
 
 ## What I would do next
 

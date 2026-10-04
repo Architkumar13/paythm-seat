@@ -140,6 +140,8 @@ Creating a show requires `Authorization: Bearer $ADMIN_TOKEN`. User tokens canno
 
 ## API
 
+A complete Postman collection is included in [`paytm_seat_reservation.postman_collection.json`](paytm_seat_reservation.postman_collection.json) with pre-configured requests and token extractors.
+
 ### Create a show
 
 `POST /shows` with the admin token.

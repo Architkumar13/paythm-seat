@@ -1,0 +1,244 @@
+{
+	"info": {
+		"_postman_id": "e9a5c81f-7b3b-419b-a320-1b2289456789",
+		"name": "Paytm Seat Reservation API",
+		"description": "Postman collection for evaluating the Paytm Seat Reservation Take-Home Assignment.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "dev-admin-token",
+			"type": "string"
+		},
+		{
+			"key": "userToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "showId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "reservationId",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Liveness Probe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health/live",
+							"host": ["{{baseUrl}}"],
+							"path": ["health", "live"]
+						}
+					}
+				},
+				{
+					"name": "Readiness Probe (DB Ping)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health/ready",
+							"host": ["{{baseUrl}}"],
+							"path": ["health", "ready"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth & Users",
+			"item": [
+				{
+					"name": "Register / Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set('userToken', jsonData.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"alice\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["users"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Shows",
+			"item": [
+				{
+					"name": "Create Show (Admin Only)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.id) {",
+									"    pm.collectionVariables.set('showId', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"friday-blockbuster\",\n    \"seats\": [\"A1\", \"A2\", \"A3\", \"A4\", \"B1\", \"B2\"],\n    \"price_paise\": 25000,\n    \"per_user_limit\": 4\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shows",
+							"host": ["{{baseUrl}}"],
+							"path": ["shows"]
+						}
+					}
+				},
+				{
+					"name": "Get Show State & Seats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/shows/{{showId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["shows", "{{showId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Reservations",
+			"item": [
+				{
+					"name": "Reserve Seats (Idempotent)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.reservation_id) {",
+									"    pm.collectionVariables.set('reservationId', jsonData.reservation_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{userToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "req-booking-001"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"seats\": [\"A1\", \"A2\"],\n    \"idempotency_key\": \"req-booking-001\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/shows/{{showId}}/reserve",
+							"host": ["{{baseUrl}}"],
+							"path": ["shows", "{{showId}}", "reserve"]
+						}
+					}
+				},
+				{
+					"name": "Cancel Reservation (Owner Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{userToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/reservations/{{reservationId}}/cancel",
+							"host": ["{{baseUrl}}"],
+							"path": ["reservations", "{{reservationId}}", "cancel"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Observability",
+			"item": [
+				{
+					"name": "Scrape Prometheus Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/metrics",
+							"host": ["{{baseUrl}}"],
+							"path": ["metrics"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

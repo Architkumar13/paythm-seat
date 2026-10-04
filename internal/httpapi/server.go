@@ -17,15 +17,25 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Store defines the database contract required by the HTTP handlers.
+type Store interface {
+	Ping(ctx context.Context) error
+	UpsertUser(ctx context.Context, username string) (string, bool, error)
+	CreateShow(ctx context.Context, in store.CreateShowInput) (store.Show, error)
+	GetShow(ctx context.Context, id string) (store.Show, error)
+	Reserve(ctx context.Context, in store.ReserveInput) (store.ReserveResult, error)
+	Cancel(ctx context.Context, userID, reservationID string) (store.Reservation, bool, error)
+}
+
 type Server struct {
-	store      *store.Store
+	store      Store
 	issuer     *auth.Issuer
 	adminToken string
 	log        *slog.Logger
 	metrics    *metrics.Metrics
 }
 
-func New(st *store.Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *metrics.Metrics) http.Handler {
+func New(st Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *metrics.Metrics) http.Handler {
 	s := &Server{store: st, issuer: issuer, adminToken: adminToken, log: log, metrics: m}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.root)
