@@ -1,13 +1,3 @@
----
-title: Paytm Seat Reservation
-emoji: 🎟️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Seat reservation
 
 JSON API that sells assigned seats for one show. A seat is confirmed to at most one user, a user cannot pass the per-show limit, and a repeated idempotency key does not create a second reservation. Money is integer paise.
@@ -149,8 +139,6 @@ This is a demo identity provider. `POST /users` registers a username, or logs in
 Creating a show requires `Authorization: Bearer $ADMIN_TOKEN`. User tokens cannot create shows. A user can cancel only their own reservations.
 
 ## API
-
-A complete Postman collection is included in [`paytm_seat_reservation.postman_collection.json`](paytm_seat_reservation.postman_collection.json) with pre-configured requests and token extractors.
 
 ### Create a show
 
