@@ -51,13 +51,11 @@ func New(st Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *
 }
 
 func (s *Server) root(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, http.StatusOK, map[string]string{
 		"service": "seat-reservation",
 		"live":    "/health/live",
 		"ready":   "/health/ready",
 		"metrics": "/metrics",
-		"path":    r.URL.Path,
-		"headers": r.Header,
 	})
 }
 
