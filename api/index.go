@@ -2,10 +2,10 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -69,33 +69,29 @@ func initHandler() {
 
 // Handler is the Vercel serverless entry point.
 func Handler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("debug_vercel") == "1" {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"url_path":  r.URL.Path,
-			"raw_query": r.URL.RawQuery,
-			"matched":   r.Header.Get("x-matched-path"),
-			"forwarded": r.Header.Get("x-forwarded-uri"),
-			"__path":    r.URL.Query().Get("__path"),
-		})
-		return
-	}
-
 	once.Do(initHandler)
 	if initErr != nil {
 		http.Error(w, "Database initialization error: "+initErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Restore original request path so mux matches /health/live, /shows/{id}, etc.
+	// Restore original request path from client request
+	if r.RequestURI != "" {
+		if reqURL, err := url.ParseRequestURI(r.RequestURI); err == nil && reqURL.Path != "" && reqURL.Path != "/api" {
+			r.URL.Path = reqURL.Path
+			if reqURL.RawQuery != "" {
+				r.URL.RawQuery = reqURL.RawQuery
+			}
+		}
+	}
 	if p := r.URL.Query().Get("__path"); p != "" {
 		if !strings.HasPrefix(p, "/") {
 			p = "/" + p
 		}
 		r.URL.Path = p
-	} else if orig := r.Header.Get("x-matched-path"); orig != "" {
+	} else if orig := r.Header.Get("x-matched-path"); orig != "" && orig != "/api" {
 		r.URL.Path = orig
-	} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" {
+	} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" && orig != "/api" {
 		r.URL.Path = orig
 	}
 
