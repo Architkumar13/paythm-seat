@@ -103,5 +103,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	r.URL = &u
 	r.RequestURI = u.RequestURI()
 
+	w.Header().Set("X-Debug-U-Path", u.Path)
+	w.Header().Set("X-Debug-Req-Path", r.URL.Path)
+	w.Header().Set("X-Debug-P", p)
+	w.Header().Set("X-Debug-RawQuery", r.URL.RawQuery)
+
 	handler.ServeHTTP(w, r)
 }
