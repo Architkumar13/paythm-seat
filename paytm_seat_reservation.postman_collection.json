@@ -1,0 +1,229 @@
+{
+  "info": {
+    "name": "Paytm Seat Reservation",
+    "description": "Requests for the seat reservation API. Defaults target the live service. For a local compose stack, set baseUrl to http://localhost:8080 and adminToken to dev-admin-token. Run the folders from top to bottom so later requests can reuse the saved ids.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "https://paythm-seat.vercel.app"},
+    {"key": "adminToken", "value": "paytm-demo-admin"},
+    {"key": "userToken", "value": ""},
+    {"key": "userId", "value": ""},
+    {"key": "otherUserToken", "value": ""},
+    {"key": "showId", "value": ""},
+    {"key": "reservationId", "value": ""},
+    {"key": "idempotencyKey", "value": "ada-attempt-1"}
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/live"
+          }
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/ready"
+          }
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('userToken', body.token);",
+                  "if (body.user_id) pm.collectionVariables.set('userId', body.user_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ada\"\n}"
+            },
+            "url": "{{baseUrl}}/users"
+          }
+        },
+        {
+          "name": "Register other user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('otherUserToken', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"grace\"\n}"
+            },
+            "url": "{{baseUrl}}/users"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shows",
+      "item": [
+        {
+          "name": "Create show",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.collectionVariables.set('showId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{adminToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"friday-night\",\n  \"seats\": [\"A1\", \"A2\", \"A3\"],\n  \"price_paise\": 25000\n}"
+            },
+            "url": "{{baseUrl}}/shows"
+          }
+        },
+        {
+          "name": "Get show",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/shows/{{showId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reservations",
+      "item": [
+        {
+          "name": "Reserve A1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'ada-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.reservation_id) pm.collectionVariables.set('reservationId', body.reservation_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{userToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seats\": [\"A1\"],\n  \"idempotency_key\": \"{{idempotencyKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/shows/{{showId}}/reserve"
+          }
+        },
+        {
+          "name": "Replay same key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{userToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seats\": [\"A1\"],\n  \"idempotency_key\": \"{{idempotencyKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/shows/{{showId}}/reserve"
+          }
+        },
+        {
+          "name": "Same key, different seats",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{userToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seats\": [\"A2\"],\n  \"idempotency_key\": \"{{idempotencyKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/shows/{{showId}}/reserve"
+          }
+        },
+        {
+          "name": "Cancel as other user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{otherUserToken}}"}
+            ],
+            "url": "{{baseUrl}}/reservations/{{reservationId}}/cancel"
+          }
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{userToken}}"}
+            ],
+            "url": "{{baseUrl}}/reservations/{{reservationId}}/cancel"
+          }
+        }
+      ]
+    }
+  ]
+}

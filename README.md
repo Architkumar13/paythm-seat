@@ -140,6 +140,8 @@ Creating a show requires `Authorization: Bearer $ADMIN_TOKEN`. User tokens canno
 
 ## API
 
+[`paytm_seat_reservation.postman_collection.json`](paytm_seat_reservation.postman_collection.json) calls the live service. For local, set `baseUrl` to `http://localhost:8080` and `adminToken` to `dev-admin-token`. Run the folders from top to bottom.
+
 ### Create a show
 
 `POST /shows` with the admin token.
