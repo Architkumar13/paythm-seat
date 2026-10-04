@@ -248,7 +248,7 @@ go test ./...
 ## Deploy
 
 - **Live Service URL**: `https://paythm-seat.vercel.app`
-- **Database**: Cloud PostgreSQL 16 on Neon (`us-east-2`)
+- **Database**: Cloud PostgreSQL 16 on Neon (`us-east-2`). Set `DATABASE_URL` in the Vercel project environment. The connection string is not stored in this repository.
 - **Health Live**: `https://paythm-seat.vercel.app/health/live`
 - **Health Ready**: `https://paythm-seat.vercel.app/health/ready`
 - **Metrics**: `https://paythm-seat.vercel.app/metrics`
