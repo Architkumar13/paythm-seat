@@ -48,6 +48,17 @@ func Load() (Config, error) {
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
 	}
+	// The public Vercel project may only have DATABASE_URL set. These are the
+	// same demo values published in the README and render.yaml. Local and Docker
+	// still require the variables.
+	if os.Getenv("VERCEL") == "1" {
+		if cfg.AdminToken == "" {
+			cfg.AdminToken = "paytm-demo-admin"
+		}
+		if cfg.JWTSecret == "" {
+			cfg.JWTSecret = "paytm-demo-jwt-secret-change-me"
+		}
+	}
 	if len(cfg.AdminToken) < 8 {
 		return Config{}, fmt.Errorf("ADMIN_TOKEN must be at least 8 characters")
 	}

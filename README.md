@@ -247,6 +247,8 @@ go test ./...
 
 ## Deploy
 
+Vercel runs `cmd/server` with the Go framework preset. The process listens on `PORT` and sees the real request path. Do not add an `api/` serverless handler: Vercel invokes that function at `/api` and does not forward the client path, so every route except `/` 404s.
+
 - **Live Service URL**: `https://paythm-seat.vercel.app`
 - **Database**: Cloud PostgreSQL 16 on Neon (`us-east-2`). Set `DATABASE_URL` in the Vercel project environment. The connection string is not stored in this repository.
 - **Health Live**: `https://paythm-seat.vercel.app/health/live`

@@ -51,15 +51,15 @@ func New(st Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *
 }
 
 func (s *Server) root(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"service":    "seat-reservation",
-		"live":       "/health/live",
-		"ready":      "/health/ready",
-		"metrics":    "/metrics",
-		"r_URL_Path": r.URL.Path,
-		"r_RawQuery": r.URL.RawQuery,
-		"r_ReqURI":   r.RequestURI,
-		"headers":    r.Header,
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"service": "seat-reservation",
+		"live":    "/health/live",
+		"ready":   "/health/ready",
+		"metrics": "/metrics",
 	})
 }
 
