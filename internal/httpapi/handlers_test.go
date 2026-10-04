@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,31 @@ func TestHealthEndpoints(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("readiness fail: expected 503, got %d", rec.Code)
+	}
+}
+
+func TestVercelPathSimulation(t *testing.T) {
+	ms := &mockStore{}
+	h, _, _ := setupTestServer(ms)
+
+	req := httptest.NewRequest(http.MethodGet, "/api?path=health/live", nil)
+	p := req.URL.Query().Get("path")
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	u := *req.URL
+	u.Path = p
+	u.RawPath = p
+	q := u.Query()
+	q.Del("path")
+	u.RawQuery = q.Encode()
+	req.URL = &u
+	req.RequestURI = u.RequestURI()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Fatalf("expected status:ok, got code %d body %s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -2,8 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/api?path=$1"
+      "source": "/:path*",
+      "destination": "/api?path=:path*"
     }
   ]
 }

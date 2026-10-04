@@ -38,7 +38,7 @@ type Server struct {
 func New(st Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *metrics.Metrics) http.Handler {
 	s := &Server{store: st, issuer: issuer, adminToken: adminToken, log: log, metrics: m}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", s.root)
+	mux.HandleFunc("GET /{$}", s.root)
 	mux.HandleFunc("POST /users", s.createUser)
 	mux.HandleFunc("POST /shows", s.createShow)
 	mux.HandleFunc("GET /shows/{id}", s.getShow)
@@ -51,6 +51,10 @@ func New(st Store, issuer *auth.Issuer, adminToken string, log *slog.Logger, m *
 }
 
 func (s *Server) root(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"service": "seat-reservation",
 		"live":    "/health/live",

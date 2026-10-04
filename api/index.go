@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -74,20 +75,33 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Restore path from vercel rewrite query parameter (?path=$1)
-	if p := r.URL.Query().Get("path"); p != "" {
+	p := r.URL.Query().Get("path")
+	if p == "" {
+		if orig := r.Header.Get("x-matched-path"); orig != "" && orig != "/api" {
+			p = orig
+		} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" && orig != "/api" {
+			if u, err := url.Parse(orig); err == nil && u.Path != "" {
+				p = u.Path
+			}
+		}
+	}
+
+	if p != "" {
 		if !strings.HasPrefix(p, "/") {
 			p = "/" + p
 		}
-		u := *r.URL
-		u.Path = p
-		u.RawPath = p
-		q := u.Query()
-		q.Del("path")
-		u.RawQuery = q.Encode()
-		r.URL = &u
-		r.RequestURI = u.RequestURI()
+	} else {
+		p = "/"
 	}
+
+	u := *r.URL
+	u.Path = p
+	u.RawPath = p
+	q := u.Query()
+	q.Del("path")
+	u.RawQuery = q.Encode()
+	r.URL = &u
+	r.RequestURI = u.RequestURI()
 
 	handler.ServeHTTP(w, r)
 }
