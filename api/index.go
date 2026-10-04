@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -69,6 +70,19 @@ func initHandler() {
 
 // Handler is the Vercel serverless entry point.
 func Handler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("debug") == "1" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"url_path":      r.URL.Path,
+			"url_raw_path":  r.URL.RawPath,
+			"url_raw_query": r.URL.RawQuery,
+			"request_uri":   r.RequestURI,
+			"query":         r.URL.Query(),
+			"header":        r.Header,
+		})
+		return
+	}
+
 	once.Do(initHandler)
 	if initErr != nil {
 		http.Error(w, "Database initialization error: "+initErr.Error(), http.StatusInternalServerError)
