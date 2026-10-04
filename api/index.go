@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -80,13 +79,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(p, "/") {
 			p = "/" + p
 		}
-		r.URL.Path = p
-	} else if orig := r.Header.Get("x-matched-path"); orig != "" && orig != "/api" {
-		r.URL.Path = orig
-	} else if orig := r.Header.Get("x-forwarded-uri"); orig != "" && orig != "/api" {
-		if u, err := url.Parse(orig); err == nil && u.Path != "" {
-			r.URL.Path = u.Path
-		}
+		u := *r.URL
+		u.Path = p
+		u.RawPath = p
+		q := u.Query()
+		q.Del("path")
+		u.RawQuery = q.Encode()
+		r.URL = &u
+		r.RequestURI = u.RequestURI()
 	}
 
 	handler.ServeHTTP(w, r)
