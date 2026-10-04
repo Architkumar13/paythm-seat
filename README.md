@@ -2,7 +2,121 @@
 
 JSON API that sells assigned seats for one show. A seat is confirmed to at most one user, a user cannot pass the per-show limit, and a repeated idempotency key does not create a second reservation. Money is integer paise.
 
-The sale decision is one Postgres transaction: lock the buyer's quota row, lock the requested seats in label order, and update a seat only while its status is `available`. Details are in [WRITEUP.md](WRITEUP.md).
+The sale decision is one Postgres transaction: lock the buyer's quota row, lock the requested seats in label order, and update a seat only while its status is `available`. Failure modes and what to page on are in [WRITEUP.md](WRITEUP.md).
+
+## High-level design
+
+One Go process is the system of record in front of one Postgres primary. There is no cache, queue, or second writer. A seat changes owner only when a transaction commits.
+
+```mermaid
+flowchart LR
+  buyers[Buyers and burst script] --> api[Go API]
+  api --> pg[(Postgres)]
+  api --> metrics["/metrics"]
+  api --> logs[JSON logs]
+```
+
+| Piece | Role |
+| --- | --- |
+| `cmd/server` | HTTP process. Migrate on startup, then serve. |
+| `cmd/burst` | One-command on-sale storm. Not part of the request path. |
+| Postgres | Seats, quotas, reservations, idempotency keys. |
+| `/health/ready` | `SELECT 1`. Returns 503 when the database is unreachable, so the platform stops sending traffic. |
+| `/metrics` | Counters in the process. Seat gauges are queried from Postgres on each scrape. |
+
+A reserve either commits one outcome or changes nothing. Declines are 4xx. A lost database connection is a 500, because the server does not guess whether the seat was sold.
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as API
+  participant P as Postgres
+  C->>A: POST /shows/{id}/reserve
+  A->>A: user id from bearer token
+  A->>P: one READ COMMITTED transaction
+  alt first time, seats free, under limit
+    P-->>A: commit confirmed
+    A-->>C: 201
+  else same key, same seats
+    P-->>A: stored outcome
+    A-->>C: 200 or the original 4xx
+  else seat gone or over limit
+    P-->>A: commit decline only
+    A-->>C: 409
+  end
+```
+
+Invariant on every show: `available + held + confirmed = total_seats`. `held` stays 0. Reserve confirms immediately, and release is `POST /reservations/{id}/cancel`.
+
+## Low-level design
+
+### Layout
+
+```
+cmd/server          process entry, pool, graceful shutdown
+cmd/burst           load client
+internal/httpapi    routes, auth checks, status codes, request logs
+internal/auth       HS256 tokens, constant-time admin compare
+internal/config     environment
+internal/metrics    Prometheus counters and seat gauges
+internal/store      schema, SQL, the atomic reserve and cancel
+internal/integration  concurrency test against a local Postgres
+```
+
+`internal/store` is the only package that talks to Postgres. Handlers do not run SQL. The burst client uses the public HTTP API only.
+
+### Tables
+
+```mermaid
+erDiagram
+  users ||--o{ reservations : places
+  users ||--o{ user_show_counts : quota
+  shows ||--|{ seats : contains
+  shows ||--o{ reservations : for
+  reservations ||--o| idempotency_keys : stored_as
+  users ||--o{ idempotency_keys : retries
+```
+
+| Table | What one row means |
+| --- | --- |
+| `seats` | One physical seat. Primary key `(show_id, seat_label)`. Status `available`, `held`, or `confirmed`. |
+| `user_show_counts` | How many seats this user currently has confirmed for this show. |
+| `reservations` | One booking. `amount_paise` is `price_paise * seat count`, stored as `BIGINT`. |
+| `idempotency_keys` | Unique on `(user_id, idempotency_key)`. Holds the request hash and the first outcome. |
+
+### Reserve transaction
+
+`internal/store/reserve.go`, isolation `READ COMMITTED`. Lock order is always:
+
+1. `idempotency_keys` for `(user_id, idempotency_key)`
+2. `user_show_counts` for `(user_id, show_id)`
+3. `seats` rows, one `SELECT … FOR UPDATE` per label, sorted by `seat_label`
+
+Steps inside that transaction:
+
+1. Insert the idempotency key with `ON CONFLICT DO NOTHING`. The loser waits until the winner commits or rolls back.
+2. If the key already has an outcome, return it and write nothing. A different seat set or show is `idempotency_mismatch`.
+3. `SAVEPOINT booking`.
+4. Lock the quota row and add the seat count only when `confirmed_seats + n <= per_user_limit`.
+5. Lock every requested seat in label order. If any label is missing or not `available`, roll back to the savepoint, store the decline on the key, and commit that row only.
+6. Otherwise update each seat with `WHERE status = 'available'`, insert the reservation, store `confirmed` on the key, and commit.
+
+The conditional update is the sale. The row lock makes the check and the update one step. Sorting labels means two overlapping multi-seat requests cannot deadlock. Cancel locks the reservation, then the quota, then the same seat order, and clears a seat only while `reservation_id` still matches.
+
+Deadlock (`40P01`) and serialization failure (`40001`) are retried inside the process up to three times.
+
+### HTTP mapping
+
+| Outcome | Status |
+| --- | --- |
+| New reservation | 201 |
+| Replay of a confirmed reservation | 200, header `Idempotent-Replayed: true` |
+| `seat_taken`, `per_user_limit`, `idempotency_mismatch` | 409 |
+| Replay of a stored decline | same 4xx, plus `Idempotent-Replayed: true` |
+| `unknown_seat`, bad JSON | 400 |
+| Not the owner | 403 |
+| Missing show or reservation | 404 |
+| Database unreachable on a reserve | 500 |
 
 ## Run locally
 
