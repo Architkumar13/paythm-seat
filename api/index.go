@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +69,18 @@ func initHandler() {
 
 // Handler is the Vercel serverless entry point.
 func Handler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("debug_vercel") == "1" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"url_path":  r.URL.Path,
+			"raw_query": r.URL.RawQuery,
+			"matched":   r.Header.Get("x-matched-path"),
+			"forwarded": r.Header.Get("x-forwarded-uri"),
+			"__path":    r.URL.Query().Get("__path"),
+		})
+		return
+	}
+
 	once.Do(initHandler)
 	if initErr != nil {
 		http.Error(w, "Database initialization error: "+initErr.Error(), http.StatusInternalServerError)
@@ -75,6 +89,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	// Restore original request path so mux matches /health/live, /shows/{id}, etc.
 	if p := r.URL.Query().Get("__path"); p != "" {
+		if !strings.HasPrefix(p, "/") {
+			p = "/" + p
+		}
 		r.URL.Path = p
 	} else if orig := r.Header.Get("x-matched-path"); orig != "" {
 		r.URL.Path = orig
