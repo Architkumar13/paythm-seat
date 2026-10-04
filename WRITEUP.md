@@ -97,6 +97,24 @@ This design prioritizes **correctness and financial integrity over raw throughpu
      ```
    - A payment webhook (e.g. Paytm PG) transitions `held` to `confirmed`, while an expiry worker or lazy read clears expired holds.
 
+## AI usage (directed vs decided)
+
+In line with the assignment guidelines, AI tools were used as an engineering accelerant. The division between what was **decided** and what was **directed** was:
+
+- **What I decided (Architecture & Invariants)**:
+  - **Consistency model**: Selecting a CP architecture anchored in a single PostgreSQL primary rather than Redis/distributed locks to eliminate split-brain, clock drift, and cache synchronization failure modes.
+  - **Concurrency control mechanism**: Selecting `READ COMMITTED` with explicit row-level locks (`SELECT ... FOR UPDATE`) over `SERIALIZABLE` to prevent serialization failure (`40001`) retry storms under hot-seat contention.
+  - **Deadlock avoidance protocol**: Enforcing global ascending alphanumeric sorting on seat labels prior to lock acquisition, and locking the user quota row before any seat rows.
+  - **Idempotency lifecycle & savepoint semantics**: Designing terminal result recording for both confirmations and declines, using PostgreSQL transaction savepoints (`SAVEPOINT booking`) to roll back quota/seat modifications while persisting the decline on the key.
+  - **Invariant-driven observability**: Formulating the reconciliation invariant (`available + held + confirmed == total_seats`) and querying PostgreSQL directly on scrape to guarantee gauge accuracy.
+
+- **What I directed the AI to do (Implementation & Scaffolding)**:
+  - Generating Go boilerplate for HTTP routing, JSON request/response encoding with max byte limits, and `pgxpool` configuration.
+  - Scaffolding the multi-stage `Dockerfile`, `docker-compose.yml`, and Render deployment blueprint (`render.yaml`).
+  - Scaffolding the synthetic burst load generator (`cmd/burst`) and initial integration test harness.
+
+Every line of SQL locking, transaction boundary, and concurrency logic has been reviewed, benchmarked under live burst storms, and verified. I have complete technical ownership of the code and can explain, debug, or extend any part of it live during the interview.
+
 ## What I would do next
 
 - A real hold: `held` until a payment webhook confirms or a deadline expires, with the same conditional update so expiry cannot release a seat that was confirmed in the meantime.
